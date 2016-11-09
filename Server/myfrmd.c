@@ -19,17 +19,90 @@
 #define MAX_COMMAND 256
 #define MAX_FILE_MESSAGE 512
 
+char[] deleteSpaces(char src[]){
+  char [strlen(src)] dst;
+   // src is supposed to be zero ended
+   // dst is supposed to be large enough to hold src
+  int s, d=0;
+  for (s=0; src[s] != 0; s++)
+    if (src[s] != ' ') {
+       dst[d] = src[s];
+       d++;
+    }
+  dst[d] = 0;
+  return dst;	
+}
+
+int checkUsername(char user[]){
+	FILE* fp;
+	char [MAX_COMMAND] line;
+	fp = fopen("Users.txt","r");
+	if(fp == NULL){
+		fp = fopen("Users.txt","w");
+		fprintf(fp,"%s\n",user);
+		fclose(fp);
+		return 1;
+	}
+	else {
+		int i=0;
+		while (fgets(line, sizeof(line), fp)){
+			i++;
+			strtok(line,"\n");
+			if(strcmp(line,user)==0){
+				fclose(fp);
+				return i;
+			}
+		}
+		fclose(fp);
+	}
+	i++;
+	fp = fopen("Users.txt","a");
+	fprintf(fp,"%s\n",user);
+	fclose(fp);
+	return 2;
+}
+
+int checkPassword(char pword[], int i){
+	FILE* fp;
+	char [MAX_COMMAND] line;
+	fp = fopen("Passwords.txt","r");
+	if(fp == NULL){
+		fp = fopen("Passwords.txt","w");
+		fprintf(fp,"%s\n",pword);
+		fclose(fp);
+		return 1;
+	}
+	else {
+		int j = 0;
+		while (fgets(line, sizeof(line), fp)){
+			j++;
+			strtok(line,"\n");
+			if(strcmp(line,pword)==0 && j==i){
+				fclose(fp);
+				return 1;
+			}
+		}
+		fclose(fp);
+	}
+	if(i>j){
+		fp = fopen("Passwords.txt","a");
+		fprintf(fp,"%s\n",pword);
+		fclose(fp);
+		return 1;
+	}
+	return 0;
+}
 int main(int argc, char * argv[]){
-	struct sockaddr_in sin;
+	struct sockaddr_in sin, client_addr;
 	char buf[MAX_COMMAND];
 	int len;
 	struct timeval tv, tv2;
 	double elapsed_time;
-	int s, new_s1, new_s2, new_s3;
+	int s,s_udp,new_s1, new_s2, new_s3;
 	int opt;
+	socklen_t addr_len = sizeof(client_addr);
 	int server_port;
 	MHASH td;
-	FILE * fp;
 	
 	//Input Arugment Error Checking
 	if(argc == 2){
@@ -50,34 +123,101 @@ int main(int argc, char * argv[]){
 		perror("simplex-talk: socket");
 		exit(1);
 	}
+
+        if((s_udp = socket(PF_INET, SOCK_DGRAM, 0)) < 0){
+                perror("simplex-talk: socket");
+                exit(1);
+        }
+
 	
 	/*Set socket option*/
 	if((setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(int)))<0){
 		perror("simplex-talk:socket");
 		exit(1);
 	}
+        if((setsockopt(s_udp, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(int)))<0){
+                perror("simplex-talk:socket");
+                exit(1);
+        }
+
 	if((bind(s,(struct sockaddr *)&sin, sizeof(sin)))<0){
 		perror("simplex-talk: bind");
 		exit(1);
 	}
+        if((bind(s_udp,(struct sockaddr *)&sin, sizeof(sin)))<0){
+                perror("simplex-talk: bind");
+                exit(1);
+        }
+
 	if((listen(s,MAX_PENDING))<0){
 		perror("simplex-talk:listen");
 		exit(1);
 	}
-	printf("Welcome to the TCP Server\n");
+	printf("Welcome to the Message Server\n");
 	printf("Waiting for client connection. \n");
 	//Waiting for the connection and then acting
 	if((new_s1 = accept(s,(struct sockaddr *)&sin, &len))<0){ //Moved outside to wait for initial connection
                 perror("Server Connection Error!");
                 exit(1);
         }
+	
 	int ret = -4;
+	ret = send(new_s1, "1", 10, 0);
+	if (ret < 0){
+		printf("Unable to connect send to client\n");
+		exit(1);
+	}
+	char[MAX_COMMAND] username;
+	char[MAX_COMMAND] password;
+	int verified = 0;
+	while(verified == 0){
+		memset(username, 0,strlen(username));
+		memset(password, 0,strlen(password));
+		printf("Prompting for login information\n");
+		
+		ret = recvfrom(s_udp, username, sizeof(username), 0, (struct sockaddr *)&client_addr, &addr_len);
+		if (ret == -1){
+			printf("Username receive error\n");
+			exit(1);
+		}
+//Add check username function
+		int n = checkUsername(username);
+		ret = sendto(s_udp, "1", 10, 0,(struct sockaddr *)&client_addr, &addr_len);
+		if (ret < 0){
+			printf("Unable to connect send to client\n");
+			exit(1);
+		}
+        	ret = recvfrom(s_udp, password, sizeof(password), 0, (struct sockaddr *)&client_addr, &addr_len);
+        	if (ret == -1){
+                	printf("Password receive error\n");
+                	exit(1);
+        	}
+//Add check password function
+		int p = checkPassword(pword,n);
+		if(p==0){
+			ret = sendto(s_udp, "0", 10, 0,(struct sockaddr *)&client_addr, &addr_len);
+			if (ret < 0){
+				printf("Unable to send to client\n");
+				exit(1);
+			}
+		}
+		else {
+			ret = sendto(s_udp, "1", 10, 0,(struct sockaddr *)&client_addr, &addr_len);
+			verified=1;
+			if (ret < 0){
+				printf("Unable to connect send to client\n");
+				exit(1);
+			}
+		}
+	
+	}
+	
 	while(1){
 		//Resetting the buf string to accept new request from the client
 		memset(buf, 0,strlen(buf));	
 		if (new_s1!=-1){
 			printf("Prompting for client command.\n");
-			ret = recv(new_s1, buf, MAX_COMMAND, 0);
+			ret = recvfrom(s_udp, buf, sizeof(buf), 0, (struct sockaddr *)&client_addr, &addr_len);
 		}
 		if (ret == 0 || new_s1==-1){	//Ret == 0 if client has closed connection
 			printf("Waiting for client connection.\n");
@@ -90,7 +230,7 @@ int main(int argc, char * argv[]){
 			perror("Server receive error: Error receiving command!");
 			exit(1);
 		}
-		if (strcmp("REQ", buf) == 0){
+		if (strcmp("DWN", buf) == 0){
 			char name_len[10];
 			//Server receiving the length of the file in a short int as well as the file name
 			ret = recv(new_s1, name_len, 10,0);
@@ -167,7 +307,7 @@ int main(int argc, char * argv[]){
                                 continue;
                         }
 
-		}else if(strcmp("UPL", buf) == 0){
+		}else if(strcmp("APN", buf) == 0){
 			char name_len[10];
 			//Server receiving the length of the file in a short int as well as the file name
 			ret = recv(new_s1, name_len, 10,0);
@@ -266,22 +406,8 @@ int main(int argc, char * argv[]){
 			}
 
 		}else if(strcmp("LIS", buf) == 0){
-			//Opening the directory and listing.txt
+			//Opening listing.txt
 			FILE * fp;
-			fp = fopen("listing.txt", "w");
-			DIR *d;
-  			struct dirent *dir;
-  			d = opendir(".");
-			//If the directory succesfully opens, loop through the directory and print file names to listing.txt
-  			if (d){
-    				while ((dir = readdir(d)) != NULL) {
-					if ((strcmp(dir->d_name,".") != 0) && (strcmp(dir->d_name,"..")!=0)){
-      						fprintf(fp,"%s\n",dir->d_name);
-					}
-    				}	
-				fclose(fp);
-    				closedir(d);
-  			}
 			//Sending the contents of listing.txt to the client
 			fp = fopen("listing.txt", "r");
                         fseek(fp, 0L, SEEK_END);
@@ -290,14 +416,7 @@ int main(int argc, char * argv[]){
 			char content[size];
 			fread(content, sizeof(char), size, fp);
                         fclose(fp);
-                        char file_size[10];
-                        snprintf(file_size, 10, "%d", size);
-                        ret = send(new_s1, file_size, 10, 0);
-                        if(ret == -1){
-                                perror("server send error: Error sending file size");
-                                continue;
-                        }
-                        ret = send(new_s1, content, size, 0);
+                        ret = sendto(s_udp, content, size, 0,(struct sockaddr *)&client_addr, &addr_len);
                         if(ret == -1){
                                 perror("server send error: Error sending file content");
                                 continue;
@@ -305,117 +424,97 @@ int main(int argc, char * argv[]){
                                
 			
 	
-		}else if(strcmp("MKD", buf) == 0){
-			char name_len[10];
+		}else if(strcmp("CRT", buf) == 0){
+			
 			//Server receiving the length of the file in a short int as well as the file name
-			ret = recv(new_s1, name_len, 10,0);
-			if(ret == 0) continue; // Client has closed connection continue
-			else if(ret < 0){
-				perror("server receive error: Error receiving file name length!");
-				exit(1);
-			}
-			int l = atoi(name_len);
-			char dir_name[l];
-                        ret = recv(new_s1, dir_name, l,0);
-                        if(ret == 0) continue; // Client has closed connection continue
+			char board_name[MAX_COMMAND];
+                        ret = recvfrom(s_udp, board_name, sizeof(board_name), 0, (struct sockaddr *)&client_addr, &addr_len);
                         else if(ret < 0){
                                 perror("server receive error: Error receiving file name!");
                                 exit(1);
                         }
-			//Creating the new directory. If the directory already exists, send -2. 
-			//If the server was created successfully, send 10000. 
-			//If the server could not be created successfuly, send -1
-			DIR* d = opendir(dir_name);
-			if (d) {
-				if(send(new_s1, "-2",2 , 0)<0){
-					perror("server send error: Error sending directory already exists!");
-				}
-				continue;
-			}
-			else if(ENOENT == errno){
-				int stat = mkdir(dir_name);
-				if (!stat){
-					if(send(new_s1, "10000",5,0)<0){
-						perror("server send error: Error sending directory successfully created!");
-					}
+			if( access(board_name, F_OK ) != -1 ) {//Board exists
+		                ret = sendto(s_udp, "-2", 2, 0,(struct sockaddr *)&client_addr, &addr_len);
+                		if (ret < 0){
+                        		printf("Unable to connect send to client\n");
+                        		exit(1);
+                		}
+
+				
+			} 
+			else {   		
+				FILE * fp = fopen(board_name,"w");
+				if(fp==NULL){
+					ret = sendto(s_udp, "-1", 2, 0,(struct sockaddr *)&client_addr, &addr_len);
+		                	if (ret < 0){
+                        			printf("Unable to connect send to client\n");
+						fclose(fp);
+                   				exit(1);
+                			}
 				}
 				else {
-					if(send(new_s1, "-1",2,0)<0){
-						perror("server send error: Error sending directory not successfully created!");
-					}
+		                        FILE * list;
+		                       	list = fopen("listing.txt", "a");
+					fprintf(list,"%s\n",board_name);
+					fclose(list);
+					fprintf(fp,"%s\n",username);
+                                        ret = sendto(s_udp, "1", 2, 0,(struct sockaddr *)&client_addr, &addr_len);
+                                        if (ret < 0){
+                                                printf("Unable to connect send to client\n");
+						fclose(fp);
+                                                exit(1);
+                                        }
+
 				}
+				fclose(fp);
+
 			}
-		}else if(strcmp("RMD", buf) == 0){
-			char name_len[10];
-			//Server receiving the length of the file in a short int as well as the file name
-			ret = recv(new_s1, name_len, 10,0);
-			if(ret == 0) continue; // Client has closed connection continue
-			else if(ret < 0){
-				perror("server receive error: Error receiving file name length!");
-				exit(1);
-			}
-			int l = atoi(name_len);
-			char dir_name[l];
-                        ret = recv(new_s1, dir_name, l,0);
-                        if(ret == 0) continue; // Client has closed connection continue
+		}else if(strcmp("MSG", buf) == 0){
+			char board_name[MAX_COMMAND];
+                        ret = recvfrom(s_udp, board_name, sizeof(board_name), 0, (struct sockaddr *)&client_addr, &addr_len);
                         else if(ret < 0){
                                 perror("server receive error: Error receiving file name!");
                                 exit(1);
                         }
-			DIR* d = opendir(dir_name);
-			if (d) {
-				//Sending a 1 to the client to show that the directory exists
-				if(send(new_s1, "1",2 , 0)<0){
-					perror("server send error: Error sending directory does exist!");
-				}
-				char confirm[3];
-				ret = recv(new_s1, confirm, 3,0);
-				confirm[3]='\0';
-	                        if(ret == 0) continue; // Client has closed connection continue
-                        	else if(ret < 0){
-                                	perror("server receive error: Error receiving deletion confirmation!");
-                                	exit(1);
-                        	}
-				int empty_flag = 0;
-				struct dirent *dir;
-				//Deleting the contents of the directory
-				if (strcmp(confirm, "Yes")==0){
-					while ((dir = readdir(d)) != NULL) {
-						if ((strcmp(dir->d_name,".") != 0) && (strcmp(dir->d_name,"..")!=0)){
-							printf("%s\n", dir->d_name);
-      							empty_flag = 1;
-							break;	
-						}
-    					}
-					//Sending the confirmation that the directory was removed or not removed
-					if (empty_flag == 0){
-						int check = rmdir(dir_name);
-						if(!check){
-							if(send(new_s1, "1",2 , 0)<0){
-								perror("server send error: Error sending directory deleted!");
-							}
-						}
-						else {
-							if(send(new_s1, "-1",2 , 0)<0){
-								perror("server send error: Error sending failed to delete directory!");
-							}
-						}
-					}
-					else {
-						if(send(new_s1, "-1",2 , 0)<0){
-							perror("server send error: Error sending failed to delete directory");
-						}
-					}
-				}
-				else {
-					continue;
-				}
+			char message[MAX_COMMAND];
+                        ret = recvfrom(s_udp, message, sizeof(message), 0, (struct sockaddr *)&client_addr, &addr_len);
+                        else if(ret < 0){
+                                perror("server receive error: Error receiving message!");
+                                exit(1);
+                        }
+
+			FILE * fp;
+			if (access(board_name,F_OK)!=-1){
+				char c;
+				unsigned line_count = 0;
+				fp = fopen(board_name,"r");
+				while ( (c=fgetc(fp)) != EOF ) {
+     			        	if ( c == '\n' )
+            					line_count++;
+    				}
+				int message_num = (line_count -1)/2;
+				fclose(fp);
+				
+				fp = fopen(board_name,"a");
+				fprintf(fp,"%i %s\n",message_num, message);
+				fprintf("%s\n",username);
+                                ret = sendto(s_udp, "1", 2, 0,(struct sockaddr *)&client_addr, &addr_len);
+                                if (ret < 0){
+                                       printf("Unable to connect send to client\n");
+                                       fclose(fp);
+                                       exit(1);
+                                 }
+		
+				
 			}
-			else if(ENOENT == errno){
-				if(send(new_s1, "-1",2 , 0)<0){
-					perror("server send error: Error sending directory doesn't exist!");
-				}
-				continue;
+			else {
+                                ret = sendto(s_udp, "-1", 2, 0,(struct sockaddr *)&client_addr, &addr_len);
+                                if (ret < 0){
+                                       printf("Unable to connect send to client\n");
+                                       fclose(fp);
+                                       exit(1);
+                                 }
+
 			}
 		}else if(strcmp("CHD", buf) == 0){
 			char name_len[10];
