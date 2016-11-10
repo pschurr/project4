@@ -1,8 +1,8 @@
 //Rob Freedy, Nicholas Haydel, Patrick Schurr
 //Computer Networks
-//Assignment 3
+//Assignment 4
 //NetIDs: nhaydel, pschurr, rfreedy
-//myftpd.c
+//myfrm.c
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,6 +13,7 @@
 #include <netdb.h>
 #include <mhash.h>
 #define MAX_LINE 256
+#define MAX_COMMAND 256
 
 int main(int argc, char * argv[]){
 	MHASH td;
@@ -24,12 +25,13 @@ int main(int argc, char * argv[]){
 	char ack[MAX_LINE];
 	struct timeval tv,tv2;
         double elapsed_time;
-	int s, ret, len, new_s1;
+	int s, s_udp, ret, len, new_s1;
 	int server_port;
 	char command[MAX_LINE];
 	char operation[10];
 	char decision[3];
 	char file_name[MAX_LINE];
+
 	if (argc==3) {
 		host = argv[1];
 		server_port = atoi(argv[2]);
@@ -57,21 +59,64 @@ int main(int argc, char * argv[]){
 		perror("simplex-talk: socket"); 
 		exit(1);
 	}
+	if ((s_udp = socket(PF_INET, SOCK_STREAM, 0)) < 0) { 
+		perror("simplex-talk: socket");
+		exit(1);
+	}
 	
-	printf("Welcome to your first TCP client! To quit, type \'Exit\'\n");
-
 	if (connect(s, (struct sockaddr *)&sin, sizeof(sin)) < 0){
 		perror("simplex-talk: connect");
 		close(s); 
 		exit(1);
 	}
+		
+	if (connect(s_udp, (struct sockaddr *)&sin, sizeof(sin)) < 0){
+		perror("simplex-talk: connect");
+		close(s); 
+		exit(1);
+	}
+
+	int usercheck = 0;
+	char username[MAX_COMMAND];
+	char password[MAX_COMMAND];
+	int ret1 = -4;
+	while(usercheck == 0){
+		//Sending the Username
+		printf("Please enter a username : ");
+		memset(username,'\0',strlen(username));
+		fgets(username, sizeof(username), stdin);
+		strtok(username,"\n");
+		if(send(s_udp,username,strlen(username)+1,0) == -1){
+			perror("Client send error");
+			exit(1);
+		}
+		//Sending the Password
+		printf("Please enter a password : ");
+		memset(password,'\0',strlen(password));
+		fgets(password, sizeof(password), stdin);
+		strtok(password, "\n");
+		if(send(s_udp,password,strlen(password)+1,0) == -1){
+			perror("Client send error");
+			exit(1);
+		}
+		//Receving verification from the server the the user is good to create messages
+		char ack1[3];
+		if(recv(s, ack1, 4, 0)==-1){
+			printf("Server password verification receive error");
+			exit(1);
+		}
+		usercheck = atoi(ack1);	
+		if(usercheck == 0){
+			printf("Incorrect Username/Password. Please enter a valid username and password combination.\n ");
+		}		
+	}
+	printf("Welcome to the Message Board!\n");
 
 	/* main loop: get and send lines of text */
 	while (1){//fgets(buf, sizeof(buf), stdin)) {
 		//buf[MAX_LINE-1] = '\0';
 		memset(operation,'\0',strlen(operation));
-
-		printf("Please enter an operation (REQ, UPL, DEL, LIS, MKD, RMD, CHD, XIT): ");   // PSchurr prompt user input
+		printf("Please enter an operation for the message board : CRT, LIS, MSG, DLT, RDB, EDT, APN, DWN, DST, XIT, SHT");   // PSchurr prompt user input
 		while(strlen(operation)<3){
 			memset(operation,'\0',strlen(operation));
 			fgets(operation, sizeof(operation), stdin);
@@ -80,8 +125,8 @@ int main(int argc, char * argv[]){
 		
 		len=strlen(operation) +1;
 		
-		// REQ
-		if(strcmp("REQ", operation) == 0) {
+		// CRT
+		if(strcmp("CRT", operation) == 0) {
 			if(send(s,operation,strlen(operation)+1,0)==-1){
 				perror("client send error!"); 
 				exit(1);	
@@ -104,7 +149,7 @@ int main(int argc, char * argv[]){
                                 continue;
                         }
 			char size[10];
-  			if((ret = recv(s,size, 10, 0))<0){
+			if((ret = recv(s,size, 10, 0))<0){
 				perror("client receive error: Error receiving file length!");
 				//exit(1);
 				continue;
@@ -118,10 +163,10 @@ int main(int argc, char * argv[]){
 				ret = recv(s,hash, 16, 0);
 				hash[16]='\0';
 				if(ret<0){//Check if the proper hash was received.
-                                	perror("client receive error: Error receiving file hash!");
-                                	//exit(1);
-                                	continue;
-                        	}
+					perror("client receive error: Error receiving file hash!");
+					//exit(1);
+					continue;
+				}
 				fp = fopen(file_name, "w");
                                 if(fp==NULL){
                                         printf("Error opening file\n");
@@ -165,10 +210,10 @@ int main(int argc, char * argv[]){
 				if (td == MHASH_FAILED) return 1; 
 				int bytes = 0;
 				while ((bytes=fread(&temp, sizeof(char),1000, fp) != 0))//Calculate the hash of the whole file.
-    				{
+				{
 					
-      					mhash(td, &temp, 1000);
-    				}
+					mhash(td, &temp, 1000);
+				}
 				fclose(fp);
 				unsigned char *serverHash = mhash_end(td);
 				hash[16] = '\0';
@@ -192,8 +237,8 @@ int main(int argc, char * argv[]){
 			
 			
 
-		//UPL
-		} else if( strcmp("UPL", operation) == 0) {
+		//MSG
+		} else if( strcmp("MSG", operation) == 0) {
 			if(send(s,operation,len,0)==-1){  // client sends operation to upload a file to server
 				perror("client send error!"); 
 				exit(1);	
@@ -221,7 +266,7 @@ int main(int argc, char * argv[]){
 			// receive ACK
 			if(recv(s, ack, 4, 0)==-1){
 				perror("Client receive error: Error receiving acknowledgement!");
-                        	continue;
+				continue;
 			}
 			if( strcmp("ACK", ack) !=0){ // make sure server sent proper acknowledgement
 				perror("Acknowledgement not properly received!");
@@ -311,8 +356,8 @@ int main(int argc, char * argv[]){
 
 
 
-		// DEL	
-		} else if (strcmp("DEL", operation) == 0) {
+		// DLT	
+		} else if (strcmp("DLT", operation) == 0) {
 			if(send(s,operation,len,0)==-1){
 				perror("client send error!"); 
 				exit(1);
@@ -336,7 +381,7 @@ int main(int argc, char * argv[]){
                                 continue;
                         }
 			char size[10];
-  			
+			
 			if(recv(s,size, 10, 0)==-1){
 				perror("client receive error: Error receiving file length!");
 				continue;
@@ -369,7 +414,7 @@ int main(int argc, char * argv[]){
 					printf("Enter a valid decision\n");
 				}
 			}
-  			
+			
 			if(recv(s,size, 10, 0)==-1){
 				perror("client receive error: Error receiving file length!");
 				continue;
@@ -391,7 +436,7 @@ int main(int argc, char * argv[]){
 				exit(1);
 			}	
 			char size[10];
-  			if((ret = recv(s,size, 10, 0))<0){
+			if((ret = recv(s,size, 10, 0))<0){
 				perror("client receive error: Error receiving file length!");
 				//exit(1);
 				continue;
@@ -421,8 +466,8 @@ int main(int argc, char * argv[]){
 			printf("%s\n", content);
 		
 
-		// MKD
-		} else if (strcmp("MKD", operation) == 0) {
+		// EDT
+		} else if (strcmp("EDT", operation) == 0) {
 			if(send(s,operation,len,0)==-1){
 				perror("client send error!"); 
 				exit(1);
@@ -462,8 +507,8 @@ int main(int argc, char * argv[]){
 			}
 		
 	
-		// RMD
-		} else if (strcmp("RMD", operation) == 0) {
+		// RDB
+		} else if (strcmp("RDB", operation) == 0) {
 			if(send(s,operation,len,0)==-1){
 				perror("client send error!"); 
 				exit(1);	
@@ -541,8 +586,8 @@ int main(int argc, char * argv[]){
 				printf("%s does not exist on server\n", file_name);
 				continue;
 			}
-		// CHD
-		} else if(strcmp("CHD",operation) ==0){
+		// APN
+		} else if(strcmp("APN",operation) ==0){
 			if(send(s,operation,len,0) ==-1){
 				perror("Client send error!");
 				exit(1);
@@ -585,6 +630,8 @@ int main(int argc, char * argv[]){
 			}
 
 	
+		} else if (strcmp("DWN", operation) == 0) {
+		} else if (strcmp("DST", operation) == 0) {
 		} else if (strcmp("XIT", operation) == 0) {
 			if(send(s,operation,len,0)==-1){
 				perror("client send error!"); 
@@ -593,6 +640,7 @@ int main(int argc, char * argv[]){
 			close(s);
 			printf("Session has been closed.\n");
 			return 0;	
+		} else if (strcmp("SHT", operation) == 0) {
 		}
 	}
 
