@@ -16,9 +16,71 @@
 #include <dirent.h>
 #include <unistd.h>
 #define MAX_PENDING 5
-#define MAX_COMMAND 256
+#define MAX_COMMAND 1024
 #define MAX_FILE_MESSAGE 512
 
+int deleteLineRange(char file[], int begin, int end){
+	FILE * fp;
+	FILE * new_fp;
+        size_t len = 0;
+        int read;
+        char buf[MAX_COMMAND];
+	fp = fopen(file,"r");
+	new_fp = fopen("temp.txt","w+");
+	if(fp==NULL || new_fp == NULL){
+		return -1;
+	}
+	int line_num = 0;
+	while(fgets(buf, sizeof(buf), fp) != NULL){
+		if(line_num>=begin && line_num<=end){
+		}	
+		else {
+			fprintf(new_fp, "%s",buf);
+		}
+		line_num++;
+	}
+	fclose(fp);
+	fclose(new_fp);
+	if( !rename("temp.txt", file))
+	{
+    		return 0;
+	}
+	return -1;
+
+}
+int deleteMessage(char file[],char user[], int mid){
+	FILE * fp;
+	size_t len = 0;
+	int read;
+	char buf[MAX_COMMAND];
+	fp = fopen(file,"r");
+	if (fp == NULL) return -2;
+	fgets(buf, sizeof(buf), fp); //Get creator of the board
+	int line_num = 0;
+	int message_num=0;
+	while(fgets(buf, sizeof(buf), fp) != NULL){
+		if(line_num%2==0){
+			message_num++;
+		}
+		if (message_num==mid){
+			fgets(buf, sizeof(buf), fp);
+			strtok(buf,"\n");
+			if(strcmp(buf, user)==0){
+				fclose(fp);
+				int ret = deleteLineRange(file,line_num+1,line_num+2);//Delete the message and user
+				return ret;			
+			}
+			else {
+				fclose(fp);
+				return -4;
+			}
+			
+		}
+		line_num++;
+		
+	}
+	return -5;
+}
 int checkUsername(char user[]){
 	FILE* fp;
 	char line[MAX_COMMAND];
@@ -496,50 +558,79 @@ int main(int argc, char * argv[]){
                                 exit(1);
                         }
 
-		}else if(strcmp("DEL", buf) == 0){
+		}else if(strcmp("DLT", buf) == 0){
 			FILE * fp;	
-			char name_len[10];
-			//Server receiving the length of the file in a short int as well as the file name
-			ret = recv(new_s1, name_len, 10,0);
-			if(ret == 0) continue; // Client has closed connection continue
-			else if(ret < 0){
-				perror("server receive error: Error receiving file name length!");
-				exit(1);
-			}
-			int l = atoi(name_len);
-			char file_name[l];
-                        ret = recv(new_s1, file_name, l,0);
-			
-			//Sending the client either a 1 or -1 based on if the file exists or not
-			fp = fopen(file_name, "r");
-			if (fp == NULL){
-				ret = send(new_s1, "-1",2,0);
-				if(ret == -1){
-					perror("server send error: Error sending file size");
-				}
-				continue;
-			}
-			ret = send(new_s1, "1",2,0);
-
-			//Receiving the confirmation for deleting the file. If the user confirms the delete, receiving 1, if not, receiving -1
-			char confirmation_string[2];
-			ret = recv(new_s1, confirmation_string, 2, 0);
-			int confirm_delete = atoi(confirmation_string);
-			if(confirm_delete == -1) continue;
-			//Actually deleting the file
-			int remove_check = remove(file_name);
-			if(remove_check == 0) {
-				ret = send(new_s1, "1",2,0);
-				if(ret == -1){
-					perror("server send error: Error sending file deletion status");
-				}
+                        char board_name[MAX_COMMAND];
+                        ret = recvfrom(s_udp, board_name, sizeof(board_name), 0, (struct sockaddr *)&client_addr, &addr_len);
+                        if(ret < 0){
+                                perror("server receive error: Error receiving board name!");
+                                exit(1);
+                        }
+                        board_name[ret]='\0';		
+			char message_id[10];
+                        ret = recvfrom(s_udp, message_id, sizeof(message_id), 0, (struct sockaddr *)&client_addr, &addr_len);
+                        if(ret < 0){
+                                perror("server receive error: Error receiving message id!");
+                                exit(1);
+                        }
+			int id = atoi(message_id);
+			if(access(board_name,F_OK)==-1){
+                                ret = sendto(s_udp, "-1", 2, 0,(struct sockaddr *)&client_addr, addr_len);
+                                if (ret < 0){
+                                       printf("Unable to connect send to client\n");
+                                       fclose(fp);
+                                       exit(1);
+                                 }
 				
-   			} else {
-				ret = send(new_s1, "-1",2,0);
-				if(ret == -1){
-					perror("server send error: Error sending file deletion status");
-				}
-   			}
+			}
+			if (id < 0){
+                                ret = sendto(s_udp, "-2", 2, 0,(struct sockaddr *)&client_addr, addr_len);
+                                if (ret < 0){
+                                       printf("Unable to connect send to client\n");
+                                       fclose(fp);
+                                       exit(1);
+                                 }
+	
+			}
+			int del = deleteMessage(board_name, username,id);
+			if (del == 0){
+                                ret = sendto(s_udp, "0", 2, 0,(struct sockaddr *)&client_addr, addr_len);
+                                if (ret < 0){
+                                       printf("Unable to connect send to client\n");
+                                       fclose(fp);
+                                       exit(1);
+                                 }
+				
+			}
+			else if(del == -2){
+                                ret = sendto(s_udp, "-2", 2, 0,(struct sockaddr *)&client_addr, addr_len);
+                                if (ret < 0){
+                                       printf("Unable to connect send to client\n");
+                                       fclose(fp);
+                                       exit(1);
+                                 }
+
+			}
+			else if(del == -4){
+                                ret = sendto(s_udp, "-4", 2, 0,(struct sockaddr *)&client_addr, addr_len);
+                                if (ret < 0){
+                                       printf("Unable to connect send to client\n");
+                                       fclose(fp);
+                                       exit(1);
+                                 }
+
+			}
+			else {
+                                ret = sendto(s_udp, "-5", 2, 0,(struct sockaddr *)&client_addr, addr_len);
+                                if (ret < 0){
+                                       printf("Unable to connect send to client\n");
+                                       fclose(fp);
+                                       exit(1);
+                                 }
+
+			}
+			
+			//Sending the client either a 1 or -1 based 
  
 		}else if(strcmp("XIT", buf) == 0){
 			//closing the client socket and going back to the waiting for client state

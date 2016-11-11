@@ -398,74 +398,55 @@ int main(int argc, char * argv[]){
                         }
 
 		}else if (strcmp("DLT", operation) == 0) {
-			if(send(s,operation,len,0)==-1){
-				perror("client send error!"); 
-				exit(1);
-			}	
-			
-			printf("Please enter the file to delete: ");
-                        fgets(file_name, sizeof(file_name), stdin);//Send file info to server
-                        strtok(file_name, "\n");
-                        int name_len = strlen(file_name)+1;
-                        char len_str[10];
-                        snprintf(len_str, 10, "%d", name_len);
-		
-			if(send(s, len_str, strlen(len_str)+1, 0)==-1){
-				perror("client send error: Error sending file name length!");
+                        if(sendto(s_udp,operation,strlen(operation), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
+                                perror("client send error!");
+                                exit(1);
+                        }
+			char board_name[MAX_COMMAND];
+			printf("Please enter the board to delete from: ");
+                        fgets(board_name, sizeof(board_name), stdin);//Send file info to server
+                        strtok(board_name, "\n");
+                        if(sendto(s_udp,board_name,strlen(board_name), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
+                                perror("client send error!");
+                                exit(1);
+                        }
+			char message_id[10];
+			printf("Please enter the id of the message to delete: ");
+                        fgets(message_id, sizeof(message_id), stdin);//Send file info to server
+                        strtok(message_id, "\n");
+                        if(sendto(s_udp,message_id,strlen(message_id), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
+                                perror("client send error!");
+                                exit(1);
+                        }
+
+                        char response[2];
+                        if(recvfrom(s_udp, response, 2, 0, (struct sockaddr*) &sin, &addr_len)==-1){
+                                printf("Server password verification receive error");
+                                exit(1);
+                        }
+                        int resp = atoi(response);
+                        if (resp==-1){
+                                printf("Board does not exist.\n");
                                 continue;
                         }
-                        file_name[name_len] ='\0';
-                        
-			if(send(s, file_name, name_len, 0)==-1){
-                                perror("client send error: Error sending file name!");
-                                continue;
+			else if(resp==-2){
+
+				printf("Invalid message id\n");
+				continue;
+			}
+			else if(resp==-4){
+				printf("Invalid user.\n");
+				continue;
+			}
+			else if(resp==-5){
+				printf("Message does not exist.\n");
+				continue;
+			}
+			
+                        else {
+                                printf("Successfully added message to %s!\n", board_name);
                         }
-			char size[10];
-			
-			if(recv(s,size, 10, 0)==-1){
-				perror("client receive error: Error receiving file length!");
-				continue;
-			}
-			int file_size = atoi(size);
-			
-			if(file_size<0){ // make sure file exists on server side 
-				continue;
-			}
-			int c =0;
-			char decision[3];
-			while(1){
-				printf("Are you sure you want to delete this file? Enter YES or NO: ");
-				fgets(decision, sizeof(decision)+1, stdin);
-				strtok(decision,"\n");
-				//printf("%s\n",decision);
-				if(strcmp("YES",decision)==0){
-					if(send(s,"1",len,0)==-1){
-						perror("client send error!"); 
-						exit(1);
-					}
-					break;
-				}else if(strcmp("NO",decision) ==0){
-					if(send(s,"-1",len,0)==-1){
-						perror("client send error!"); 
-						exit(1);
-					}
-					break;	
-				}else{
-					printf("Enter a valid decision\n");
-				}
-			}
-			
-			if(recv(s,size, 10, 0)==-1){
-				perror("client receive error: Error receiving file length!");
-				continue;
-			}
-			int did_del= atoi(size);
-			
-			if(did_del<0){ // make sure file was deleted.
-				printf("Delete was not successful\n");
-			} else{
-				printf("Delete successful\n");
-			} 
+	
 
 			//memset(operation,0,strlen(operation));	
 		
