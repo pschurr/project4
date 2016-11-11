@@ -391,6 +391,8 @@ int main(int argc, char * argv[]){
                                 perror("server receive error: Error receiving file name!");
                                 exit(1);
                         }
+			printf("%s\n",board_name);
+			board_name[ret]='\0';
 			if( access(board_name, F_OK ) != -1 ) {//Board exists
 		                ret = sendto(s_udp, "-2", 2, 0,(struct sockaddr *)&client_addr, addr_len);
                 		if (ret < 0){

@@ -141,12 +141,12 @@ int main(int argc, char * argv[]){
 		len=strlen(operation) +1;
 		
 		// CRT
-		if(strcmp("CRT", operation) == 0) {
-			if(send(s,operation,strlen(operation)+1,0)==-1){
+		if(strcmp("DWN", operation) == 0) {
+			if(sendto(s,operation,strlen(operation), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
 				perror("client send error!"); 
 				exit(1);	
 			}
-			printf("Please enter the requested file name: ");
+			printf("Please enter the name of the board to create: ");
 			fgets(file_name, sizeof(file_name), stdin);
 			strtok(file_name, "\n");
 			int name_len = strlen(file_name)+1;
@@ -225,7 +225,7 @@ int main(int argc, char * argv[]){
 			
 
 		//MSG
-		} else if( strcmp("MSG", operation) == 0) {
+		} else if( strcmp("APN", operation) == 0) {
 			if(send(s,operation,len,0)==-1){  // client sends operation to upload a file to server
 				perror("client send error!"); 
 				exit(1);	
@@ -328,7 +328,40 @@ int main(int argc, char * argv[]){
 
 
 		// DLT	
-		} else if (strcmp("DLT", operation) == 0) {
+		} else if(strcmp("CRT",operation)==0){
+			char board_name[MAX_COMMAND];
+                        if(sendto(s_udp,operation,strlen(operation), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
+                                perror("client send error!");
+                                exit(1);
+                        }
+                        printf("Please enter the name of the board to create: ");
+                        fgets(board_name, sizeof(board_name), stdin);
+                        strtok(board_name, "\n");
+                        if(sendto(s_udp,board_name,strlen(board_name), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
+                                perror("client send error!");
+                                exit(1);
+                        }
+                	char response[2];
+                	if(recvfrom(s_udp, response, 2, 0, (struct sockaddr*) &sin, &addr_len)==-1){
+                        	printf("Server password verification receive error");
+                        	exit(1);
+                	}
+                	int resp = atoi(response);
+                	if (resp==-1){
+                        	printf("Unable to create board.\n");
+                        	continue;
+                	}
+			else if(resp==-2){
+				printf("Board %s already exists.\n", board_name);
+			}
+			else {
+				printf("Board %s successfully created!\n", board_name);
+			}
+                	memset(response,'\0',strlen(response));
+
+
+	
+		}else if (strcmp("DLT", operation) == 0) {
 			if(send(s,operation,len,0)==-1){
 				perror("client send error!"); 
 				exit(1);
