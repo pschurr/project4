@@ -633,9 +633,57 @@ int main(int argc, char * argv[]){
 			
 			//Sending the client either a 1 or -1 based 
  
-		}else if(strcmp("XIT", buf) == 0){
+		} else if (strcmp("RDB",buf)==0){
+                        char board_name[MAX_COMMAND];
+                        ret = recvfrom(s_udp, board_name, sizeof(board_name), 0, (struct sockaddr *)&client_addr, &addr_len);
+                        if(ret < 0){
+                                perror("server receive error: Error receiving file name!");
+                                exit(1);
+                        }
+                        if(access(board_name,F_OK)==-1){
+                                ret = sendto(s_udp, "-1", 2, 0,(struct sockaddr *)&client_addr, addr_len);
+                                if (ret < 0){
+                                       printf("Unable to connect send to client\n");
+                                       exit(1);
+                                 }
+				 continue;
+
+                        }
+			FILE * fp;
+			fp = fopen(board_name,"r");
+
+ 
+			fseek(fp, 0L, SEEK_END);
+                        int size = ftell(fp);
+                        rewind(fp);
+                        char file_size[10];
+			char content[1000];
+                        snprintf(file_size, 10, "%d", size);
+                        ret = sendto(s_udp, file_size, sizeof(file_size), 0,(struct sockaddr *)&client_addr, addr_len);
+                        if (ret < 0){
+                                printf("Unable to connect send to client\n");
+                                fclose(fp);
+                                exit(1);
+                        }
+                        memset(content,0,strlen(content));
+			int read = 0;
+                        while (read<size){
+                                int bytes=fread(content,sizeof(char),1000,fp);
+                                read+=bytes;
+                                ret = send(new_s1, content,bytes , 0);
+                                if(ret == -1){
+                                        break;
+                                }
+                                memset(content,0,strlen(content));
+                        }
+                        fclose(fp);
+			
+
+		
+			
+		} else if(strcmp("XIT", buf) == 0){
 			//closing the client socket and going back to the waiting for client state
-			bzero((char *)&sin, sizeof(sin));
+		//	bzero((char *)&sin, sizeof(sin));
 			close(new_s1);
 			new_s1 = -1;
 		} else {
