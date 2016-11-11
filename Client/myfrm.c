@@ -11,12 +11,10 @@
 #include <netinet/in.h>
 #include <sys/time.h>
 #include <netdb.h>
-#include <mhash.h>
 #define MAX_LINE 256
 #define MAX_COMMAND 256
 
 int main(int argc, char * argv[]){
-	MHASH td;
 	FILE *fp;
 	struct hostent *hp;
 	struct sockaddr_in sin;
@@ -31,7 +29,7 @@ int main(int argc, char * argv[]){
 	char operation[10];
 	char decision[3];
 	char file_name[MAX_LINE];
-
+	socklen_t addr_len = sizeof(sin);
 	if (argc==3) {
 		host = argv[1];
 		server_port = atoi(argv[2]);
@@ -59,7 +57,7 @@ int main(int argc, char * argv[]){
 		perror("simplex-talk: socket"); 
 		exit(1);
 	}
-	if ((s_udp = socket(PF_INET, SOCK_STREAM, 0)) < 0) { 
+	if ((s_udp = socket(PF_INET, SOCK_DGRAM, 0)) < 0) { 
 		perror("simplex-talk: socket");
 		exit(1);
 	}
@@ -70,11 +68,11 @@ int main(int argc, char * argv[]){
 		exit(1);
 	}
 		
-	if (connect(s_udp, (struct sockaddr *)&sin, sizeof(sin)) < 0){
+	/*if (connect(s_udp, (struct sockaddr *)&sin, sizeof(sin)) < 0){
 		perror("simplex-talk: connect");
 		close(s); 
 		exit(1);
-	}
+	}*/
 
 	int usercheck = 0;
 	char username[MAX_COMMAND];
@@ -82,32 +80,49 @@ int main(int argc, char * argv[]){
 	int ret1 = -4;
 	while(usercheck == 0){
 		//Sending the Username
+		//bzero((char *)&sin, sizeof(sin));
 		printf("Please enter a username : ");
 		memset(username,'\0',strlen(username));
 		fgets(username, sizeof(username), stdin);
 		strtok(username,"\n");
-		if(send(s_udp,username,strlen(username)+1,0) == -1){
+		if(sendto(s_udp,username,strlen(username),0,(struct sockaddr*) &sin, sizeof(struct sockaddr)) == -1){
 			perror("Client send error");
 			exit(1);
 		}
+		char response[2];
+                if(recvfrom(s_udp, response, 2, 0, (struct sockaddr*) &sin, &addr_len)==-1){
+                        printf("Server password verification receive error");
+                        exit(1);
+                }
+		int resp = atoi(response);
+		if (resp<0){
+			printf("Unable to find or create user.\n");
+			continue;
+		}
+		memset(response,'\0',strlen(response));
+
 		//Sending the Password
 		printf("Please enter a password : ");
 		memset(password,'\0',strlen(password));
 		fgets(password, sizeof(password), stdin);
 		strtok(password, "\n");
-		if(send(s_udp,password,strlen(password)+1,0) == -1){
+		if(sendto(s_udp,password,strlen(password),0, (struct sockaddr*) &sin, sizeof(struct sockaddr))== -1){
 			perror("Client send error");
 			exit(1);
 		}
+		memset(password,'\0',strlen(password));
 		//Receving verification from the server the the user is good to create messages
-		char ack1[3];
-		if(recv(s, ack1, 4, 0)==-1){
+		char ack1[1];
+		memset(ack1,'\0',sizeof(ack1));
+
+		if(recvfrom(s_udp, ack1, 1, 0, (struct sockaddr*) &sin, &addr_len)==-1){
 			printf("Server password verification receive error");
 			exit(1);
 		}
-		usercheck = atoi(ack1);	
+		
+		usercheck = atoi(ack1);
 		if(usercheck == 0){
-			printf("Incorrect Username/Password. Please enter a valid username and password combination.\n ");
+			printf("Incorrect Username/Password. Please enter a valid username and password combination.\n");
 		}		
 	}
 	printf("Welcome to the Message Board!\n");
@@ -116,7 +131,7 @@ int main(int argc, char * argv[]){
 	while (1){//fgets(buf, sizeof(buf), stdin)) {
 		//buf[MAX_LINE-1] = '\0';
 		memset(operation,'\0',strlen(operation));
-		printf("Please enter an operation for the message board : CRT, LIS, MSG, DLT, RDB, EDT, APN, DWN, DST, XIT, SHT");   // PSchurr prompt user input
+		printf("Please enter an operation for the message board : CRT, LIS, MSG, DLT, RDB, EDT, APN, DWN, DST, XIT, SHT: ");   // PSchurr prompt user input
 		while(strlen(operation)<3){
 			memset(operation,'\0',strlen(operation));
 			fgets(operation, sizeof(operation), stdin);
@@ -200,34 +215,6 @@ int main(int argc, char * argv[]){
 					//exit(1);
 					continue;
 				}
-				fp = fopen(file_name, "r");
-				if(fp==NULL){
-					printf("Error opening file\n");
-					exit(1);
-				}
-				unsigned char temp[1000];
-				td = mhash_init(MHASH_MD5);
-				if (td == MHASH_FAILED) return 1; 
-				int bytes = 0;
-				while ((bytes=fread(&temp, sizeof(char),1000, fp) != 0))//Calculate the hash of the whole file.
-				{
-					
-					mhash(td, &temp, 1000);
-				}
-				fclose(fp);
-				unsigned char *serverHash = mhash_end(td);
-				hash[16] = '\0';
-				if(strcmp(hash,serverHash) == 0){
-					printf("%i bytes transferred in %lf seconds: %lf Megabytes/sec\n", file_size, elapsed_time,(file_size/(elapsed_time*1000000)));
-					printf("File MD5sum: ");
-					int i;
-					for (i =0;i<16;i++) printf("%0x", hash[i]);
-					printf("\n");
-				}
-
-				else{
-					printf("Failed to receive %s.\n", file_name);
-				}	
 				//Cleanup here
 				
 			}
@@ -295,22 +282,6 @@ int main(int argc, char * argv[]){
 			unsigned char *hash;
                         char content[1000];
 			fclose(fp);
-			fp = fopen(file_name,"r");
-                        td = mhash_init(MHASH_MD5);
-                        if (td == MHASH_FAILED) return 1;
-                        int bytes = 0;
-                        while ((bytes=fread(&content, sizeof(char),1000, fp) != 0)){
-                                mhash(td,&content,1000);
-                        }
-
-                        hash = mhash_end(td);
-                        hash[16]='\0';
-                        len = strlen(hash);
-			ret = send(s,hash,len,0);
-                        if(ret==-1){
-                                perror("Client send error: Error sending hash");
-				continue;
-			}
                         fp = fopen(file_name,"r");
                         if(fp==NULL){
                                printf("Error opening file\n");
