@@ -65,7 +65,9 @@ int deleteMessage(char file[],char user[], int mid){
 		if (message_num==mid){
 			fgets(buf, sizeof(buf), fp);
 			strtok(buf,"\n");
-			if(strcmp(buf, user)==0){
+			char poster[strlen(buf)+20];
+			int n = sprintf(poster,"Posted by: %s",user);
+			if(strcmp(buf, poster)==0){
 				fclose(fp);
 				int ret = deleteLineRange(file,line_num+1,line_num+2);//Delete the message and user
 				return ret;			
@@ -478,7 +480,7 @@ int main(int argc, char * argv[]){
 		                       	list = fopen("listing.txt", "a");
 					fprintf(list,"%s\n",board_name);
 					fclose(list);
-					fprintf(fp,"%s\n",username);
+					fprintf(fp,"Creator: %s\n",username);
                                         ret = sendto(s_udp, "1", 2, 0,(struct sockaddr *)&client_addr, addr_len);
                                         if (ret < 0){
                                                 printf("Unable to connect send to client\n");
@@ -509,18 +511,17 @@ int main(int argc, char * argv[]){
 			if (access(board_name,F_OK)!=-1){
 				char c;
 				unsigned line_count = 0;
-				/*fp = fopen(board_name,"r");
+				fp = fopen(board_name,"r");
 				while ( (c=fgetc(fp)) != EOF ) {
      			        	if ( c == '\n' )
             					line_count++;
     				}
-				int message_num = (line_count)/2;
-				fclose(fp);*/
+				int message_num = (line_count+1)/2;
+				fclose(fp);
 				
 				fp = fopen(board_name,"a");
-				printf("%s \n", message);
-				fprintf(fp,"%s\n", message);
-				fprintf(fp,"%s\n",username);
+				fprintf(fp,"%i: %s\n", message_num,message);
+				fprintf(fp,"Posted by: %s\n",username);
 				fclose(fp);
                                 ret = sendto(s_udp, "1", 2, 0,(struct sockaddr *)&client_addr, addr_len);
                                 if (ret < 0){

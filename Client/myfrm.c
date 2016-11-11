@@ -444,7 +444,7 @@ int main(int argc, char * argv[]){
 			}
 			
                         else {
-                                printf("Successfully added message to %s!\n", board_name);
+                                printf("Successfully deleted message from %s!\n", board_name);
                         }
 	
 
