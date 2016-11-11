@@ -214,11 +214,11 @@ int main(int argc, char * argv[]){
         }
 	
 	int ret = -4;
-	ret = send(new_s1, "1", 10, 0);
+	/*ret = send(new_s1, "1", 10, 0);
 	if (ret < 0){
 		printf("Unable to connect send to client\n");
 		exit(1);
-	}
+	}*/
 	char username[MAX_COMMAND];
 	char password[MAX_COMMAND];
 	int verified = 0;
@@ -676,11 +676,7 @@ int main(int argc, char * argv[]){
                                 }
                                 memset(content,0,strlen(content));
                         }
-                        fclose(fp);
-			
-
-		
-			
+                        fclose(fp);	
 		} else if(strcmp("XIT", buf) == 0){
 			//closing the client socket and going back to the waiting for client state
 		//	bzero((char *)&sin, sizeof(sin));
