@@ -508,83 +508,50 @@ int main(int argc, char * argv[]){
 	
 		// RDB
 		} else if (strcmp("RDB", operation) == 0) {
-			if(send(s,operation,len,0)==-1){
-				perror("client send error!"); 
-				exit(1);	
-			}
-			printf("Please enter the directory to delete: ");
+                        if(sendto(s_udp,operation,strlen(operation), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
+                                perror("client send error!");
+                                exit(1);
+                        }
+			char file_name[MAX_COMMAND];
+			printf("Please enter the name of the board to read: ");
                         fgets(file_name, sizeof(file_name), stdin);
                         strtok(file_name, "\n");
-                        int name_len = strlen(file_name)+1;
-                        char len_str[10];
-                        snprintf(len_str, 10, "%d", name_len);
-
-                         if(send(s, len_str, strlen(len_str)+1, 0)==-1){
-                                perror("client send error: Error sending directory name length!");
-                                continue;
+                        if(sendto(s_udp,file_name,strlen(file_name), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
+                                perror("client send error!");
+                                exit(1);
                         }
-                        file_name[name_len] ='\0';
-                        if(send(s, file_name, name_len, 0)==-1){
-                                perror("client send error: Error sending directory name!");
-                                continue;
+			char file_size[10];
+                        if(recvfrom(s_udp, file_size, sizeof(file_size), 0, (struct sockaddr*) &sin, &addr_len)==-1){
+                                printf("Error receiving boards");
+                                exit(1);
                         }
-			char conf[2];
-			ret = recv(s,conf, 2,0);
-			if (ret < 0){
-				perror("client receive error: Error receiving directory existence confirmation");
+			int size = atoi(file_size);
+			if(size<0){
+				printf("%s does not exist.\n", file_name);
 				continue;
 			}
-			int c = atoi(conf);
-			char decision[3];
-			if (c > 0){
-				int i = 0;
-				while(1){
-					printf("Are you sure you want to delete this file? Enter Yes or No: ");
-					fgets(decision, sizeof(decision)+1, stdin);
-					strtok(decision,"\n");
-					decision[3]='\0';//Ensure only the confirmation is sent.
-					if(strcmp("Yes",decision)==0){
+			int received = 0;
+			int t = 0;
+			char content[1000];
+			memset(content,0,sizeof(content));
+                        while(received < size){//Receive file content
 
-					break;
-					}else if(strcmp("No",decision) ==0){
-						break;	
-					}else{
-						printf("Enter a valid decision\n");
-					}
-				}
-				if (strcmp(decision,"No") == 0){
-					printf("Delete abandoned by the user!\n");
-					if(send(s, decision, strlen(decision),0) < 0){
-						perror("client send error: Error sending deletion confirmation!");
-						continue;
-					}
-				}
-				else {
-					if(send(s, decision, strlen(decision),0) < 0){
-						perror("client send error: Error sending deletion confirmation!");
-						continue;
-					}
-					char success[2];
-					ret = recv(s, success, 2, 0);
-					if (ret < 0){
-						perror("client receive error: Error receiving directory deletion confirmation");
-						continue;
-					}
-					int succ = atoi(success);
-					if (succ > 0){
-						printf("Directory deleted\n");
-					
-					}
-					else if(succ < 0){
-						printf("Failed to delete directory\n");
-				
-					}
-				}
-			} 
-			else {
-				printf("%s does not exist on server\n", file_name);
+                                t = recv(s,content,1000,0);
+                                if (t < 0){
+                                       received = t;
+                                       break;
+                                }
+                                received = received+t;
+                                content[t]='\0';
+                                printf("%s",content);
+				memset(content,0,sizeof(content));
+                        }
+			if (received<0){
+				printf("Failed to read board");
 				continue;
 			}
+
+	
 		// APN
 		} else if(strcmp("APN",operation) ==0){
 			if(send(s,operation,len,0) ==-1){
