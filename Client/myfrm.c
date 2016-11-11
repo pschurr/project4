@@ -327,7 +327,7 @@ int main(int argc, char * argv[]){
 
 
 
-		// DLT	
+		// CRT	
 		} else if(strcmp("CRT",operation)==0){
 			char board_name[MAX_COMMAND];
                         if(sendto(s_udp,operation,strlen(operation), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
@@ -361,6 +361,42 @@ int main(int argc, char * argv[]){
 
 
 	
+		} else if (strcmp("MSG", operation)==0){
+                        char board_name[MAX_COMMAND];
+                        if(sendto(s_udp,operation,strlen(operation), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
+                                perror("client send error!");
+                                exit(1);
+                        }
+                        printf("Please enter the name of the board to post to: ");
+                        fgets(board_name, sizeof(board_name), stdin);
+                        strtok(board_name, "\n");
+                        if(sendto(s_udp,board_name,strlen(board_name), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
+                                perror("client send error!");
+                                exit(1);
+                        }
+			char message[MAX_COMMAND];
+			printf("Please enter the message: ");
+			fgets(message,sizeof(message),stdin);
+			strtok(message,"\n");
+                        if(sendto(s_udp,message,strlen(message), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
+                                perror("client send error!");
+                                exit(1);
+                        }
+
+                        char response[2];
+                        if(recvfrom(s_udp, response, 2, 0, (struct sockaddr*) &sin, &addr_len)==-1){
+                                printf("Server password verification receive error");
+                                exit(1);
+                        }
+                        int resp = atoi(response);
+                        if (resp==-1){
+                                printf("Board does not exist.\n");
+                                continue;
+                        }
+                        else {
+                                printf("Successfully added message to %s!\n", board_name);
+                        }
+
 		}else if (strcmp("DLT", operation) == 0) {
 			if(send(s,operation,len,0)==-1){
 				perror("client send error!"); 
@@ -435,40 +471,18 @@ int main(int argc, char * argv[]){
 		
 		// LIS
 		} else if (strcmp("LIS", operation) == 0) {
-			if(send(s,operation,len,0)==-1){
-				perror("client send error!"); 
-				exit(1);
-			}	
-			char size[10];
-			if((ret = recv(s,size, 10, 0))<0){
-				perror("client receive error: Error receiving file length!");
-				//exit(1);
-				continue;
-			}
-			int file_size = atoi(size);
-			ret = 0;
-			int t = 0;
-			char content[file_size+1];
-			char temp[file_size];
-			while(ret < file_size){
-                                t = recv(s,temp,file_size,0);
-                                if (t <= 0){
-                                       ret = t;
-                                       break;
-                                }
-                                ret = ret + t;
-                                strcat(content, temp);
-                                //if(ret < file_size) content[t]=0;
-                                memset(temp,0,strlen(temp));
+			if(sendto(s_udp,operation,strlen(operation), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
+                                perror("client send error!");
+                                exit(1);
+                        }
 	
-			}
-			content[file_size]='\0';
-			if(ret<0){
-				perror("client receive error: Error receiving file listing!");
-				continue;
-			}
-			printf("%s\n", content);
-		
+			char boards[MAX_COMMAND];
+                        if(recvfrom(s_udp, boards, sizeof(boards), 0, (struct sockaddr*) &sin, &addr_len)==-1){
+                                printf("Error receiving boards");
+                                exit(1);
+                        }
+			printf("%s",boards);
+
 
 		// EDT
 		} else if (strcmp("EDT", operation) == 0) {

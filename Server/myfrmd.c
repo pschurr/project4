@@ -391,7 +391,6 @@ int main(int argc, char * argv[]){
                                 perror("server receive error: Error receiving file name!");
                                 exit(1);
                         }
-			printf("%s\n",board_name);
 			board_name[ret]='\0';
 			if( access(board_name, F_OK ) != -1 ) {//Board exists
 		                ret = sendto(s_udp, "-2", 2, 0,(struct sockaddr *)&client_addr, addr_len);
@@ -436,28 +435,31 @@ int main(int argc, char * argv[]){
                                 perror("server receive error: Error receiving file name!");
                                 exit(1);
                         }
+			board_name[ret]='\0';
 			char message[MAX_COMMAND];
                         ret = recvfrom(s_udp, message, sizeof(message), 0, (struct sockaddr *)&client_addr, &addr_len);
                         if(ret < 0){
                                 perror("server receive error: Error receiving message!");
                                 exit(1);
                         }
-
+			message[ret]='\0';
 			FILE * fp;
 			if (access(board_name,F_OK)!=-1){
 				char c;
 				unsigned line_count = 0;
-				fp = fopen(board_name,"r");
+				/*fp = fopen(board_name,"r");
 				while ( (c=fgetc(fp)) != EOF ) {
      			        	if ( c == '\n' )
             					line_count++;
     				}
 				int message_num = (line_count)/2;
-				fclose(fp);
+				fclose(fp);*/
 				
 				fp = fopen(board_name,"a");
-				fprintf(fp,"%i %s\n",message_num, message);
+				printf("%s \n", message);
+				fprintf(fp,"%s\n", message);
 				fprintf(fp,"%s\n",username);
+				fclose(fp);
                                 ret = sendto(s_udp, "1", 2, 0,(struct sockaddr *)&client_addr, addr_len);
                                 if (ret < 0){
                                        printf("Unable to connect send to client\n");
