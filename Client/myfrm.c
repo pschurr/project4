@@ -360,6 +360,7 @@ int main(int argc, char * argv[]){
                                 exit(1);
                         }
 			printf("%s",boards);
+			memset(boards,0,sizeof(boards));
 
 
 		// EDT
@@ -534,6 +535,35 @@ int main(int argc, char * argv[]){
 	
 		} else if (strcmp("DWN", operation) == 0) {
 		} else if (strcmp("DST", operation) == 0) {
+                        if(sendto(s_udp,operation,strlen(operation), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
+                                perror("client send error!");
+                                exit(1);
+                        }
+
+                        char board_name[MAX_LINE];
+                        printf("Please enter the name of the board to destroy: ");
+                        fgets(board_name, sizeof(board_name), stdin);
+                        strtok(board_name, "\n");
+                        if(sendto(s_udp,board_name,strlen(board_name), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
+                                perror("client send error!");
+                                exit(1);
+                        }
+
+                        char conf[1];
+                        if(recvfrom(s_udp, conf, sizeof(conf), 0, (struct sockaddr*) &sin, &addr_len)==-1){
+                                printf("Error receiving boards");
+                                exit(1);
+                        }
+                        if(atoi(conf)==1){
+                                printf("Requested board does not exist.\n");
+                                continue;
+                        }
+			else if(atoi(conf)==2){
+				printf("User did not create board.\n");
+				continue;
+			}
+			printf("Successfully destroyed %s\n",board_name);
+
 		} else if (strcmp("XIT", operation) == 0) {
 			if(send(s,operation,len,0)==-1){
 				perror("client send error!"); 

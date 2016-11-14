@@ -19,6 +19,28 @@
 #define MAX_COMMAND 1024
 #define MAX_FILE_MESSAGE 512
 
+void removeBoard(char board[]){
+        FILE * fp;
+        FILE * new_fp;
+        size_t len = 0;
+        int read;
+        char buf[MAX_COMMAND];
+        fp = fopen("listing.txt","r");
+        new_fp = fopen("temp.txt","w+");
+        while(fgets(buf, sizeof(buf), fp) != NULL){
+                strtok(buf,"\n");
+		if(strcmp(buf, board)==0){
+                }
+                else {
+                        fprintf(new_fp, "%s\n",buf);
+                }
+        }
+        fclose(fp);
+        fclose(new_fp);
+        rename("temp.txt", "listing.txt");
+
+
+}
 int getMessageID(char message[]){
 	char id[10];
 	int i = 0;
@@ -72,9 +94,6 @@ int deleteLineRange(char file[], int begin, int end){
 		if(line_num>=begin && line_num<=end){
 		}	
 		else {
-			//char num[10];
-			//sprintf(num,"%i",(line_num+1)/2);
-			//buf[0]=num;
 			fprintf(new_fp, "%s",buf);
 		}
 		line_num++;
@@ -502,6 +521,7 @@ int main(int argc, char * argv[]){
                                 perror("server send error: Error sending file content");
                                 continue;
                         }
+			memset(content,0,sizeof(content));
                                
 			
 	
@@ -603,23 +623,48 @@ int main(int argc, char * argv[]){
                                  }
 
 			}
-		}else if(strcmp("CHD", buf) == 0){
-			char name_len[10];
-			//Server receiving the length of the file in a short int as well as the file name
-			ret = recv(new_s1, name_len, 10,0);
-			if(ret == 0) continue; // Client has closed connection continue
-			else if(ret < 0){
-				perror("server receive error: Error receiving file name length!");
-				exit(1);
-			}
-			int l = atoi(name_len);
-			char dir_name[l];
-                        ret = recv(new_s1, dir_name, l,0);
-                        if(ret == 0) continue; // Client has closed connection continue
-                        else if(ret < 0){
-                                perror("server receive error: Error receiving file name!");
+		}else if(strcmp("DST", buf) == 0){
+			char board_name[MAX_COMMAND];
+                        ret = recvfrom(s_udp, board_name, sizeof(board_name), 0, (struct sockaddr *)&client_addr, &addr_len);
+                        if(ret < 0){
+                                perror("server receive error: Error receiving board name!");
                                 exit(1);
                         }
+			if(access(board_name,F_OK)==-1){
+                                ret = sendto(s_udp, "1", 1, 0,(struct sockaddr *)&client_addr, addr_len);
+                                if (ret < 0){
+                                       printf("Unable to connect send to client\n");
+                                       exit(1);
+                                }
+				continue;
+	
+			}
+			FILE * fp = fopen(board_name,"r");
+			char match[MAX_COMMAND];
+			sprintf(match, "Created by: %s",username);
+			char line[MAX_COMMAND];
+			fgets(line, sizeof(line), fp);
+			if(strcmp(line, match)==0){
+                                ret = sendto(s_udp, "2", 1, 0,(struct sockaddr *)&client_addr, addr_len);
+                                if (ret < 0){
+                                       printf("Unable to connect send to client\n");
+                                       fclose(fp);
+                                       exit(1);
+                                 }
+
+			}
+			else{
+				removeBoard(board_name);
+				remove(board_name);
+                                ret = sendto(s_udp, "0", 1, 0,(struct sockaddr *)&client_addr, addr_len);
+                                if (ret < 0){
+                                       printf("Unable to connect send to client\n");
+                                       fclose(fp);
+                                       exit(1);
+                                 }
+
+			}
+
 
 		}else if(strcmp("DLT", buf) == 0){
 			FILE * fp;	
