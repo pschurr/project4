@@ -19,6 +19,58 @@
 #define MAX_COMMAND 1024
 #define MAX_FILE_MESSAGE 512
 
+int editMessage(char board[], char num[], char message[], char user[]){
+        if( access(board, F_OK ) == -1 ) {//Board doesn't exist
+                return 1;
+        }
+        FILE * fp;
+        FILE * new_fp;
+	new_fp = fopen("temp.txt","w+");
+	fp = fopen(board,"r");
+	int line_num = 0;
+	char buf[MAX_COMMAND];
+	int edited = 0;
+	char match[MAX_COMMAND];
+	sprintf(match,"Posted by: %s",user);
+	while(fgets(buf, sizeof(buf), fp) != NULL){
+	line_num++;
+                strtok(buf,"\n");
+                if(line_num%2==0){
+			int n = getMessageID(buf);
+			if(n==atoi(num)){
+				fgets(buf,sizeof(buf),fp);
+				strtok(buf,"\n");
+				line_num++;
+				fprintf(new_fp,"%i: %s\n",n, message);
+				if(strcmp(match,buf)==0){
+					edited=1;
+					fprintf(new_fp,"%s\n",match);
+				}
+			}
+			else{
+				fprintf(new_fp,"%s\n",buf);
+			}	
+		}
+		else {
+			fprintf(new_fp,"%s\n",buf);
+		}
+        }
+	fclose(fp);
+	fclose(new_fp);
+	if ((line_num-1)/2<atoi(num)){
+		return 2;
+	}
+	if(edited==1){
+		rename("temp.txt",board);
+		return 0;
+	}
+	else {
+		remove("temp.txt");
+		return 3;
+	}
+
+	
+}
 void removeBoard(char board[]){
         FILE * fp;
         FILE * new_fp;
@@ -50,6 +102,41 @@ int getMessageID(char message[]){
 	}
 	return atoi(id);
 }
+int checkDownloadError(char board[], char file[]){
+        if( access(board, F_OK ) == -1 ) {//Board doesn't exist
+                return 1;
+        }
+        char match[MAX_COMMAND];
+        sprintf(match,"%s-%s",board,file);
+        if(access(match, F_OK)==-1){//File doesn't exist
+                return 3;
+        }
+        char buf[MAX_COMMAND];
+        FILE * fp = fopen(board, "r");
+        if (fp == NULL){
+                return 1;
+        }
+        int line_num = 0;
+        memset(match,0,sizeof(match));
+        while(fgets(buf, sizeof(buf), fp) != NULL){
+                line_num++;
+                memset(match,0,sizeof(match));
+                strtok(buf,"\n");
+                if(line_num%2 == 0){
+                        int message_num = getMessageID(buf);
+                        sprintf(match, "%i: %s",message_num,file);
+                        if (strcmp(buf,match)==0){
+				fclose(fp);
+                                return 0;
+                        }
+                }
+
+        }
+        fclose(fp);
+        return 2;
+
+
+}
 int checkError(char board[], char file[]){
 	if( access(board, F_OK ) == -1 ) {//Board doesn't exist
 		return 1;
@@ -70,10 +157,15 @@ int checkError(char board[], char file[]){
 		line_num++;
 		memset(match,0,sizeof(match));
 		strtok(buf,"\n");
-		sprintf(match, "%i: %s",line_num/2,file);
-		if (strcmp(buf,match)==0){
-			return 2;
-		}	
+		if(line_num%2 == 0){
+			int message_num = getMessageID(buf);
+			sprintf(match, "%i: %s",message_num,file);
+			if (strcmp(buf,match)==0){
+				fclose(fp);
+				return 2;
+			}
+		}
+			
 	}
 	fclose(fp);
 	return 0;
@@ -320,7 +412,7 @@ int main(int argc, char * argv[]){
         	if (ret == -1){
                 	printf("Password receive error\n");
                 	exit(1);
-        	}
+       	}
 //Add check password function
 		int p = checkPassword(password,n);
 		if(p==0){
@@ -360,53 +452,50 @@ int main(int argc, char * argv[]){
 			exit(1);
 		}
 		if (strcmp("DWN", buf) == 0){
-			char name_len[10];
 			FILE * fp;
-			//Server receiving the length of the file in a short int as well as the file name
-			ret = recv(new_s1, name_len, 10,0);
-			if(ret == 0) continue; // Client has closed connection continue
-			else if(ret < 0){
-				perror("server receive error: Error receiving file name length!");
-				exit(1);
-			}
-			int l = atoi(name_len);
-			char file_name[l];
-                        ret = recv(new_s1, file_name, l,0);
-                        if(ret == 0) continue; // Client has closed connection continue
-                        else if(ret < 0){
+                        char board_name[MAX_COMMAND];
+                        ret = recvfrom(s_udp, board_name, sizeof(board_name), 0, (struct sockaddr *)&client_addr, &addr_len);
+                        if(ret < 0){
                                 perror("server receive error: Error receiving file name!");
                                 exit(1);
                         }
-			//Checking to see if the file exists. If it does, continue with request. If not, send the client a -1
-			fp = fopen(file_name, "r");
-			if (fp == NULL){
-				ret = send(new_s1, "-1", 2,0);
-				if(ret == -1){
-					perror("server send error: Error sending file size");
-				}
+                        board_name[ret]='\0';
+                        char file_name[MAX_COMMAND];
+                        ret = recvfrom(s_udp, file_name, sizeof(file_name), 0, (struct sockaddr *)&client_addr, &addr_len);
+                        if(ret < 0){
+                                perror("server receive error: Error receiving file name!");
+                                exit(1);
+                        }
+                        file_name[ret]='\0';
+			int err = checkDownloadError(board_name, file_name);
+			if (err!=0){
+	                        ret = sendto(s_udp, "-1", 2, 0,(struct sockaddr *)&client_addr, addr_len);
+        	                if (ret < 0){
+                	                printf("Unable to connect send to client\n");
+                        	        exit(1);
+                        	}
 
 				continue;
 			}
+		        char match[MAX_COMMAND];
+        		sprintf(match,"%s-%s",board_name,file_name);
+
+			fp =fopen(match,"r");
 			//Getting the size of the file and sending it to the client
 			fseek(fp, 0L, SEEK_END);
 			int size = ftell(fp);
 			rewind(fp);
 			char file_size[10];
-			snprintf(file_size, 10, "%d", size);
-			ret = send(new_s1, file_size, 10, 0);
-                        if(ret == -1){
-                                perror("server send error: Error sending file size");
-                                //exit(1);
-                                continue;
+			sprintf(file_size, "%i", size);
+                        ret = sendto(s_udp, file_size, sizeof(file_size), 0,(struct sockaddr *)&client_addr, addr_len);
+                        if (ret < 0){
+                                printf("Unable to connect send to client\n");
+                                exit(1);
                         }
-			//Server computes MD5 hash of the file and sends it to client as a 16-byte string. 
-			unsigned char *hash;
+
 			char content[1000];
 			int read = 0;
-                        //mhash(td,&content , 1);
-		//	mhash_deinit(td,hash);
-		//	printf("%s\n",hash);
-			fp = fopen(file_name,"r");
+	//		fp = fopen(file_name,"r");
 			memset(content,0,strlen(content));
 			while (read<size){
 				int bytes=fread(content,sizeof(char),1000,fp);
@@ -418,10 +507,6 @@ int main(int argc, char * argv[]){
 				memset(content,0,strlen(content));
 			}
 			fclose(fp);
-                        if(ret == -1){
-                                perror("server send error: Error sending file content");
-                                continue;
-                        }
 
 		}else if(strcmp("APN", buf) == 0){
                         char board_name[MAX_COMMAND];
@@ -785,6 +870,37 @@ int main(int argc, char * argv[]){
                                 memset(content,0,strlen(content));
                         }
                         fclose(fp);	
+		} else if(strcmp("EDT",buf)==0){
+                        char board_name[MAX_COMMAND];
+                        ret = recvfrom(s_udp, board_name, sizeof(board_name), 0, (struct sockaddr *)&client_addr, &addr_len);
+                        if(ret < 0){
+                                perror("server receive error: Error receiving file name!");
+                                exit(1);
+                        }
+                        board_name[ret]='\0';
+			char message_num[10];
+                        ret = recvfrom(s_udp, message_num, sizeof(message_num), 0, (struct sockaddr *)&client_addr, &addr_len);
+                        if(ret < 0){
+                                perror("server receive error: Error receiving file name!");
+                                exit(1);
+                        }
+                        message_num[ret]='\0';
+                        char message[MAX_COMMAND];
+                        ret = recvfrom(s_udp, message, sizeof(message), 0, (struct sockaddr *)&client_addr, &addr_len);
+                        if(ret < 0){
+                                perror("server receive error: Error receiving message!");
+                                exit(1);
+                        }
+                        message[ret]='\0';
+			char response[1];
+			int val = editMessage(board_name, message_num, message,username);
+                        ret = sendto(s_udp, response, 1, 0,(struct sockaddr *)&client_addr, addr_len);
+                        if(ret == -1){
+                                perror("server send error: Error sending file content");
+                                continue;
+                        }
+
+
 		} else if(strcmp("XIT", buf) == 0){
 			//closing the client socket and going back to the waiting for client state
 		//	bzero((char *)&sin, sizeof(sin));

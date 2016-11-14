@@ -141,91 +141,7 @@ int main(int argc, char * argv[]){
 		len=strlen(operation) +1;
 		
 		// CRT
-		if(strcmp("DWN", operation) == 0) {
-			if(sendto(s,operation,strlen(operation), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
-				perror("client send error!"); 
-				exit(1);	
-			}
-			printf("Please enter the name of the board to create: ");
-			fgets(file_name, sizeof(file_name), stdin);
-			strtok(file_name, "\n");
-			int name_len = strlen(file_name)+1;
-			char len_str[10];
-			snprintf(len_str, 10, "%d", name_len);//send file name and length as strings.
-			if(send(s, len_str, strlen(len_str)+1, 0)==-1){
-				perror("client send error: Error sending file name length!");
-				//exit(1);
-				continue;
-			}
-			file_name[name_len] ='\0';
-                        if(send(s, file_name, name_len, 0)==-1){
-                                perror("client send error: Error sending file name!");
-                                //exit(1);
-                                continue;
-                        }
-			char size[10];
-			if((ret = recv(s,size, 10, 0))<0){
-				perror("client receive error: Error receiving file length!");
-				//exit(1);
-				continue;
-			}
-			int file_size = atoi(size);
-
-			if ( file_size >= 0){ // Server returns a negative file length if file doesn't exist on server
-				unsigned char hash[16];
-				int ret = 0;
-				int t =0;
-				ret = recv(s,hash, 16, 0);
-				hash[16]='\0';
-				if(ret<0){//Check if the proper hash was received.
-					perror("client receive error: Error receiving file hash!");
-					//exit(1);
-					continue;
-				}
-				fp = fopen(file_name, "w");
-                                if(fp==NULL){
-                                        printf("Error opening file\n");
-                                        exit(1);
-                                }
-
-				fflush(fp);
-				char content[1000];
-				ret = 0;
-				t = 0;
-				gettimeofday(&tv, NULL);
-				while(ret < file_size){//Receive file content
-		
-					t = recv(s,content,1000,0);
-					if (t < 0){
-						ret = t;
-						break;
-					} 
-					ret = ret + t;
-					content[t]='\0';
-					fwrite(content, t,1,fp);
-					fflush(fp);
-				}
-                                gettimeofday(&tv2, NULL);
-                                elapsed_time = ((tv2.tv_sec*1000000+tv2.tv_usec) - (tv.tv_sec*1000000+tv.tv_usec));
-				elapsed_time = elapsed_time/1000000.0;
-				fclose(fp);
-					
-				if(ret<0){
-					perror("client recieve error: Error receiving file content!");
-					//exit(1);
-					continue;
-				}
-				//Cleanup here
-				
-			}
-			else {
-				printf("%s does not exist.\n", file_name);
-			}
-			
-			
-
-		
-		} else if(strcmp("CRT",operation)==0){
+		if(strcmp("CRT",operation)==0){
 			char board_name[MAX_COMMAND];
                         if(sendto(s_udp,operation,strlen(operation), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
                                 perror("client send error!");
@@ -365,44 +281,57 @@ int main(int argc, char * argv[]){
 
 		// EDT
 		} else if (strcmp("EDT", operation) == 0) {
-			if(send(s,operation,len,0)==-1){
-				perror("client send error!"); 
-				exit(1);
-			}	
-			printf("Please enter the directory name to create: ");
-                        char dir_name[MAX_LINE];
+                        if(sendto(s_udp,operation,strlen(operation), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
+                                perror("client send error!");
+                                exit(1);
+                        }
+	
+			printf("Please enter the name of the board to edit: ");
+                        char board_name[MAX_LINE];
 			
-			fgets(dir_name, sizeof(dir_name), stdin);
-                        strtok(dir_name, "\n");
-                        int name_len = strlen(dir_name)+1;
-                        char len_str[10];
-                        snprintf(len_str, 10, "%d", name_len);
-				
-			if(send(s, len_str, strlen(len_str)+1, 0)==-1){//Send the directory name and length of name
-				perror("client send error: Error sending directory name length!");
-                                continue;
+			fgets(board_name, sizeof(board_name), stdin);
+                        strtok(board_name, "\n");
+			char message_num[10];
+			printf("Please enter the id of the message to edit: ");
+			fgets(message_num,sizeof(message_num),stdin);
+			strtok(message_num,"\n");
+			printf("Please enter the new message: ");
+			char message[MAX_LINE];
+			fgets(message, sizeof(message), stdin);
+			strtok(message,"\n");
+                        if(sendto(s_udp,board_name,strlen(board_name), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
+                                perror("client send error!");
+                                exit(1);
                         }
-                        dir_name[name_len] ='\0';
-                        if(send(s, dir_name, name_len, 0)==-1){
-                                perror("client send error: Error sending directory name!");
-                                continue;
+                        if(sendto(s_udp,message_num,strlen(message_num), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
+                                perror("client send error!");
+                                exit(1);
                         }
-			char success[10];
-			if(recv(s, success, 10,0)==-1){//Check success val;
-				perror("Client receive error: Error receiving server confirmation!");
+                        if(sendto(s_udp,message,strlen(message), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
+                                perror("client send error!");
+                                exit(1);
+                        }
+			char conf[1];
+                        if(recvfrom(s_udp, conf, sizeof(conf), 0, (struct sockaddr*) &sin, &addr_len)==-1){
+                                printf("Error receiving boards");
+                                exit(1);
+                        }
+			int resp = atoi(conf);
+			if(resp==1){
+				printf("Board does not exist.\n");
 				continue;
 			}
-			int succ = atoi(success);
-			if(succ == -2){
-				printf("The directory already exists on the server!\n");
+			else if(resp == 2){
+				printf("Invalid message id.\n");
 				continue;
-			} else if(succ ==-1){
-				printf("Error making directory!\n");
-				continue;
-			}else if (succ >0){
-				printf("The directory was successfully made!\n");
 			}
-		
+			else if(resp == 3){
+				printf("Invalid user.\n");
+				continue;
+			}
+			printf("Successfully edited message %s on %s\n",message_num, board_name);
+
+
 	
 		// RDB
 		} else if (strcmp("RDB", operation) == 0) {
@@ -534,6 +463,66 @@ int main(int argc, char * argv[]){
 
 	
 		} else if (strcmp("DWN", operation) == 0) {
+                        if(sendto(s_udp,operation,strlen(operation), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
+                                perror("client send error!");
+                                exit(1);
+                        }
+		
+                        char board_name[MAX_LINE];
+                        printf("Please enter the name of the board to download from: ");
+                        fgets(board_name, sizeof(board_name), stdin);
+                        strtok(board_name, "\n");
+                        if(sendto(s_udp,board_name,strlen(board_name), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
+                                perror("client send error!");
+                                exit(1);
+                        }
+
+                        char file_name[MAX_LINE];
+                        printf("Please enter the name of the file to download: ");
+                        fgets(file_name, sizeof(file_name), stdin);
+                        strtok(file_name, "\n");
+                        if(sendto(s_udp,file_name,strlen(file_name), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
+                                perror("client send error!");
+                                exit(1);
+                        }
+	
+			char file_size[10];
+                        ret = recvfrom(s_udp, file_size, sizeof(file_size), 0, (struct sockaddr *)&sin, &addr_len);
+                        if(ret < 0){
+                                perror("client receive error: Error receiving file size!");
+                                exit(1);
+                        }
+			int size = atoi(file_size);
+			if (size<0){
+				printf("Error finding file %s\n",file_name);
+				continue;
+			}
+			FILE * fp = fopen(file_name,"w");
+                        char content[1000];
+                        int t = 0;
+                        int ret = 0;
+                        while(ret < size){
+
+                         	t = recv(s,content,1000,0);
+                                if (t <= 0){
+                                       ret = t;
+                                       break;
+                                }
+                                ret = ret + t;
+                                content[t]='\0';
+                                fwrite(content, t,1,fp);
+                               	fflush(fp);
+                        }
+                        if(ret<0){
+                                perror("client recieve error: Error receiving file content!");
+                                fclose(fp);
+                                continue;
+                        }
+			printf("Successfully downloaded %s\n",file_name);
+			fclose(fp);
+
+
+
 		} else if (strcmp("DST", operation) == 0) {
                         if(sendto(s_udp,operation,strlen(operation), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
                                 perror("client send error!");
