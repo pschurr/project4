@@ -103,6 +103,9 @@ void shutDown(){
         FILE * fp;
 
         fp = fopen("created_files.txt","r");
+	if(fp == NULL){
+		return;
+	}
         char buf[MAX_COMMAND];
         while(fgets(buf,sizeof(buf), fp) != NULL){
                 strtok(buf,"\n");
