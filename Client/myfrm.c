@@ -554,14 +554,43 @@ int main(int argc, char * argv[]){
 			printf("Successfully destroyed %s\n",board_name);
 
 		} else if (strcmp("XIT", operation) == 0) {
-			if(send(s,operation,len,0)==-1){
-				perror("client send error!"); 
-				exit(1);
-			}
+                        if(sendto(s_udp,operation,strlen(operation), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
+                                perror("client send error!");
+                                exit(1);
+                        }
+
 			close(s);
 			printf("Session has been closed.\n");
 			return 0;	
 		} else if (strcmp("SHT", operation) == 0) {
+                        if(sendto(s_udp,operation,strlen(operation), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
+                                perror("client send error!");
+                                exit(1);
+                        }
+			char password[MAX_LINE];
+			printf("Please enter the admin password: ");
+			fgets(password, sizeof(password), stdin);
+                        strtok(password, "\n");
+                        if(sendto(s_udp,password,strlen(password), 0,(struct sockaddr*) &sin, sizeof(struct sockaddr))==-1){
+                                perror("client send error!");
+                                exit(1);
+                        }
+                        char conf[1];
+                        if(recvfrom(s_udp, conf, sizeof(conf), 0, (struct sockaddr*) &sin, &addr_len)==-1){
+                                printf("Error receiving boards");
+                                exit(1);
+                        }
+			if(atoi(conf)==1){
+				printf("Successfully shut down the server.\n");
+				close(s);
+				close(s_udp);
+				return 0;				
+			}
+			else {
+				printf("Password incorrect.\n");
+			}
+			
+
 		}
 	}
 

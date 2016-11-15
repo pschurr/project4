@@ -71,6 +71,12 @@ int editMessage(char board[], char num[], char message[], char user[]){
 
 	
 }
+void addFile(char file_name[]){
+	FILE * fp;
+	fp = fopen("created_files.txt","a");
+	fprintf(fp, "%s\n",file_name);
+	fclose(fp);
+}
 void removeBoard(char board[]){
         FILE * fp;
         FILE * new_fp;
@@ -93,6 +99,20 @@ void removeBoard(char board[]){
 
 
 }
+void shutDown(){
+        FILE * fp;
+
+        fp = fopen("created_files.txt","r");
+        char buf[MAX_COMMAND];
+        while(fgets(buf,sizeof(buf), fp) != NULL){
+                strtok(buf,"\n");
+                remove(buf);
+                removeBoard(buf);
+        }
+	fclose(fp);
+        remove("created_files.txt");
+}
+
 int getMessageID(char message[]){
 	char id[10];
 	int i = 0;
@@ -311,14 +331,16 @@ int main(int argc, char * argv[]){
 	double elapsed_time;
 	int s,s_udp,new_s1, new_s2, new_s3;
 	int opt;
+	char * pword;
 	socklen_t addr_len = sizeof(client_addr);
 	int server_port;
 	
 	//Input Arugment Error Checking
-	if(argc == 2){
+	if(argc == 3){
 		server_port = atoi(argv[1]);		
+		pword = argv[2];
 	} else {
-		printf("Please run the server using the following command after compiling: ./myftpd <port_number>\n");
+		printf("Please run the server using the following command after compiling: ./myftpd <port_number> <admin_password>\n");
 		exit(1);
 	}
 
@@ -390,8 +412,6 @@ int main(int argc, char * argv[]){
 			printf("Username receive error\n");
 			exit(1);
 		}
-//		printf("%s\n",username);
-//Add check username function
 		int n = checkUsername(username);
 		if (n>=0){
 			ret = sendto(s_udp, "1", 10, 0,(struct sockaddr *)&client_addr, addr_len);
@@ -412,8 +432,7 @@ int main(int argc, char * argv[]){
         	if (ret == -1){
                 	printf("Password receive error\n");
                 	exit(1);
-       	}
-//Add check password function
+       		}
 		int p = checkPassword(password,n);
 		if(p==0){
 			ret = sendto(s_udp, "0", 10, 0,(struct sockaddr *)&client_addr, addr_len);
@@ -436,20 +455,73 @@ int main(int argc, char * argv[]){
 	while(1){
 		//Resetting the buf string to accept new request from the client
 		memset(buf, 0,strlen(buf));	
+		ret = 0;
 		if (new_s1!=-1){
 			printf("Prompting for client command.\n");
 			ret = recvfrom(s_udp, buf, sizeof(buf), 0, (struct sockaddr *)&client_addr, &addr_len);
 		}
-		if (ret == 0 || new_s1==-1){	//Ret == 0 if client has closed connection
+		else if(ret < 0){
+                        perror("Server receive error: Error receiving command!");
+                        exit(1);
+                }
+
+		if (new_s1==-1){	//Ret == 0 if client has closed connection
 			printf("Waiting for client connection.\n");
 			if((new_s1 = accept(s,(struct sockaddr *)&sin, &len))<0){
 				perror("Server Connection Error!");
 				exit(1);
 			}
-		}
-		else if(ret < 0){
-			perror("Server receive error: Error receiving command!");
-			exit(1);
+			int verified = 0;
+			while(verified == 0){
+				memset(username, 0,strlen(username));
+				memset(password, 0,strlen(password));
+				printf("Prompting for login information\n");
+			
+				ret = recvfrom(s_udp, username, sizeof(username), 0, (struct sockaddr *)&client_addr, &addr_len);
+				if (ret == -1){
+					printf("Username receive error\n");
+					exit(1);
+				}
+				int n = checkUsername(username);
+				if (n>=0){
+					ret = sendto(s_udp, "1", 10, 0,(struct sockaddr *)&client_addr, addr_len);
+					if (ret < 0){
+						printf("Unable to connect send to client\n");
+						exit(1);
+					}
+				}
+				else {
+                		        ret = sendto(s_udp, "-1", 10, 0,(struct sockaddr *)&client_addr, addr_len);
+                		        if (ret < 0){
+                		                printf("Unable to connect send to client\n");
+                		                exit(1);
+                		        }
+
+				}
+        			ret = recvfrom(s_udp, password, sizeof(password), 0, (struct sockaddr *)&client_addr, &addr_len);
+        			if (ret == -1){
+                			printf("Password receive error\n");
+                			exit(1);
+       				}
+				int p = checkPassword(password,n);
+				if(p==0){
+					ret = sendto(s_udp, "0", 10, 0,(struct sockaddr *)&client_addr, addr_len);
+					if (ret < 0){
+						printf("Unable to send to client\n");
+						exit(1);
+					}
+				}
+				else {
+					ret = sendto(s_udp, "1", 10, 0,(struct sockaddr *)&client_addr, addr_len);
+					verified=1;
+					if (ret < 0){
+						printf("Unable to connect send to client\n");
+						exit(1);
+					}
+				}
+	
+			}
+			continue;
 		}
 		if (strcmp("DWN", buf) == 0){
 			FILE * fp;
@@ -539,6 +611,7 @@ int main(int argc, char * argv[]){
                                 perror("server receive error: Error receiving file name!");
                                 exit(1);
                         }
+			//printf("%s\n",file_size);
 
 			int size = atoi(file_size);
 			if ( size >= 0){ //Server returns an error message if file size is negative
@@ -586,7 +659,7 @@ int main(int argc, char * argv[]){
 					continue;
 				}
 
-				//Writing file and checking the hash
+				addFile(f);
 				fclose(fp);
 
 			}
@@ -644,6 +717,7 @@ int main(int argc, char * argv[]){
 		                       	list = fopen("listing.txt", "a");
 					fprintf(list,"%s\n",board_name);
 					fclose(list);
+					addFile(board_name);
 					fprintf(fp,"Creator: %s\n",username);
                                         ret = sendto(s_udp, "1", 2, 0,(struct sockaddr *)&client_addr, addr_len);
                                         if (ret < 0){
@@ -715,6 +789,7 @@ int main(int argc, char * argv[]){
                                 perror("server receive error: Error receiving board name!");
                                 exit(1);
                         }
+			board_name[ret]='\0';
 			if(access(board_name,F_OK)==-1){
                                 ret = sendto(s_udp, "1", 1, 0,(struct sockaddr *)&client_addr, addr_len);
                                 if (ret < 0){
@@ -906,6 +981,36 @@ int main(int argc, char * argv[]){
 		//	bzero((char *)&sin, sizeof(sin));
 			close(new_s1);
 			new_s1 = -1;
+		} else if(strcmp("SHT", buf)==0){
+			char key[MAX_COMMAND];
+                        ret = recvfrom(s_udp, key, sizeof(key), 0, (struct sockaddr *)&client_addr, &addr_len);
+                        if(ret < 0){
+                                perror("server receive error: Error receiving message!");
+                                exit(1);
+                        }
+			key[ret]='\0';
+			if(strcmp(key,pword)==0){
+				shutDown();
+	                        ret = sendto(s_udp, "1", 1, 0,(struct sockaddr *)&client_addr, addr_len);
+        	                if(ret == -1){
+                	                perror("server send error: Error sending file content");
+                        	        continue;
+                        	}
+				close(s_udp);
+				close(new_s1);
+				exit(0);
+				
+			}
+			else {
+	                        ret = sendto(s_udp, "0", 1, 0,(struct sockaddr *)&client_addr, addr_len);
+        	                if(ret == -1){
+                	                perror("server send error: Error sending file content");
+                        	        continue;
+                        	}
+
+			}
+			
+
 		} else {
 			continue;
 		}
