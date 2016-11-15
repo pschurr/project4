@@ -601,12 +601,14 @@ int main(int argc, char * argv[]){
 			int err = checkError(board_name, file_name);
 			char conf[1];
 			sprintf(conf,"%d",err);
-			printf("HERE\n");
                         ret = sendto(s_udp, conf, 1, 0,(struct sockaddr *)&client_addr, addr_len);
                         if (ret < 0){
                                 printf("Unable to connect send to client\n");
                                 exit(1);
                         }
+			if(atoi(conf)!=0){
+				continue;
+			}
 		
 			char file_size[10];
 			//Server receiving the length of the file in a short int as well as the file name
@@ -639,8 +641,13 @@ int main(int argc, char * argv[]){
 				fprintf(fp,"Posted by: %s\n",username);
 				fclose(fp);
 				char f[MAX_COMMAND];
-				sprintf(f, "%s-%s",board_name,file_name);
+				int n =sprintf(f, "%s-%s",board_name,file_name);
+				f[n]='\0';
 				fp = fopen(f, "w");
+				if(fp == NULL){
+					printf("%s\n",f);
+					exit(1);
+				}
 				char content[1000];
 				int t = 0;
 				int ret = 0;

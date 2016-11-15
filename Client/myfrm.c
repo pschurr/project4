@@ -459,7 +459,7 @@ int main(int argc, char * argv[]){
                              fclose(fp);
                              continue;
                       	}
-
+			printf("Successfully added %s to %s\n", file_name, board_name);
 
 	
 		} else if (strcmp("DWN", operation) == 0) {
