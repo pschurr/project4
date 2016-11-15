@@ -598,6 +598,7 @@ int main(int argc, char * argv[]){
 			int err = checkError(board_name, file_name);
 			char conf[1];
 			sprintf(conf,"%d",err);
+			printf("HERE\n");
                         ret = sendto(s_udp, conf, 1, 0,(struct sockaddr *)&client_addr, addr_len);
                         if (ret < 0){
                                 printf("Unable to connect send to client\n");
