@@ -497,7 +497,9 @@ int main(int argc, char * argv[]){
 				printf("Error finding file %s\n",file_name);
 				continue;
 			}
-			FILE * fp = fopen(file_name,"w");
+			char f[MAX_LINE];
+			sprintf(f,"%s-%s",board_name, file_name);
+			FILE * fp = fopen(f,"w");
                         char content[1000];
                         int t = 0;
                         int ret = 0;
