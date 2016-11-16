@@ -316,6 +316,7 @@ int main(int argc, char * argv[]){
                                 printf("Error receiving boards");
                                 exit(1);
                         }
+			conf[1]='\0';
 			int resp = atoi(conf);
 			if(resp==1){
 				printf("Board does not exist.\n");
@@ -326,7 +327,7 @@ int main(int argc, char * argv[]){
 				continue;
 			}
 			else if(resp == 3){
-				printf("Invalid user.\n");
+				printf("Invalid user or invalid message id.\n");
 				continue;
 			}
 			printf("Successfully edited message %s on %s\n",message_num, board_name);

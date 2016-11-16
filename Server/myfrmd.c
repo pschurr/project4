@@ -243,7 +243,6 @@ int deleteMessage(char file[],char user[], int mid){
 	char message_num[10];
 	sprintf(message_num,"%i", mid);
 	while(fgets(buf, sizeof(buf), fp) != NULL){
-		
 		if (beginsWith(buf, message_num)){
 			fgets(buf, sizeof(buf), fp);
 			strtok(buf,"\n");
@@ -980,6 +979,7 @@ int main(int argc, char * argv[]){
                         message[ret]='\0';
 			char response[1];
 			int val = editMessage(board_name, message_num, message,username);
+			int n = sprintf(response,"%i",val);	
                         ret = sendto(s_udp, response, 1, 0,(struct sockaddr *)&client_addr, addr_len);
                         if(ret == -1){
                                 perror("server send error: Error sending file content");
@@ -1007,7 +1007,6 @@ int main(int argc, char * argv[]){
                 	                perror("server send error: Error sending file content");
                         	        continue;
                         	}
-				close(s_udp);
 				close(new_s1);
 				exit(0);
 				
